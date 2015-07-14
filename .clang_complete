@@ -1,0 +1,6 @@
+-std=c++1y
+-Wall
+-Wextra
+-pedantic
+-I/usr/local/include/bamtools
+-I/usr/include/bamtools
