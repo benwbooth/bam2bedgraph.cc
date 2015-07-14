@@ -423,7 +423,7 @@ int main(int argc, char **argv) {
     BamReader intervals;
     if (!autostrand.empty()) {
       if (!intervals.Open(autostrand)) {
-        throw (format("Could not open input BAM file %s") % autostrand).str();
+        throw (format("Could not open strand annotation BAM file %s") % autostrand).str();
       }
     }
 
