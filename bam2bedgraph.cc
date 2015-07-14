@@ -214,17 +214,19 @@ analyzeBam(string split_strand,
       // try to determine the strandedness of the data
       if (autostrandPass) {
         int tid = intervals.GetReferenceID(refs[read.RefID].RefName);
-        intervals.SetRegion(tid, exon.first, tid, exon.second);
-        BamAlignment interval_read;
-        while (intervals.GetNextAlignment(interval_read)) {
-          vector<pair<size_t,size_t>> interval;
-          cigar2exons(interval, interval_read.CigarData, interval_read.Position);
-          for (auto& i : interval) {
-            size_t overlap_length = std::min(exon.second, i.second) - std::max(exon.first, i.first);
+        if (tid != -1) {
+          intervals.SetRegion(tid, exon.first, tid, exon.second);
+          BamAlignment interval_read;
+          while (intervals.GetNextAlignment(interval_read)) {
+            vector<pair<size_t,size_t>> interval;
+            cigar2exons(interval, interval_read.CigarData, interval_read.Position);
+            for (auto& i : interval) {
+              size_t overlap_length = std::min(exon.second, i.second) - std::max(exon.first, i.first);
 
-            char strandtype = read.IsReverseStrand() == interval_read.IsReverseStrand()? 's' : 'r';
-            if (read_number == 1) autostrandTotals[strandtype] += overlap_length;
-            else if (read_number == 2) autostrandTotals2[strandtype] += overlap_length;
+              char strandtype = read.IsReverseStrand() == interval_read.IsReverseStrand()? 's' : 'r';
+              if (read_number == 1) autostrandTotals[strandtype] += overlap_length;
+              else if (read_number == 2) autostrandTotals2[strandtype] += overlap_length;
+            }
           }
         }
       }
