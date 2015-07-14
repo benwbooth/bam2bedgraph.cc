@@ -25,8 +25,6 @@
 #include <boost/program_options.hpp>
 #include <boost/regex.hpp>
 
-#include "IntervalTree.h"
-
 using std::string;
 using std::cout;
 using std::cerr;
@@ -129,80 +127,10 @@ void write_chr(
   }
 }
 
-// if autostrand is set, read the input annotation file into an interval tree
-static void readAnnotationFile(const string& autostrand, map<string,IntervalTree<int8_t>>& intervals) {
-  if (!autostrand.empty()) {
-    size_t chrCol=0, startCol=0, stopCol=0, strandCol=0;
-    int base=0;
-    boost::smatch match;
-    if (boost::regex_search(autostrand, match, boost::regex{R"(\.([^.]+)$)"})) {
-      string m {match[1].first, match[1].second};
-      if (boost::regex_search(m, boost::regex{R"(^bed$)", boost::regex::icase})) {
-        cerr << "Reading bed annotation file " << autostrand << endl;
-        chrCol=0;
-        startCol=1;
-        stopCol=2;
-        strandCol=5;
-        base=0;
-      }
-      else if (boost::regex_search(m, boost::regex{R"(^(gff|gtf|gff3)$)", boost::regex::icase})) {
-        cerr << "Reading gff annotation file " << autostrand << endl;
-        chrCol=0;
-        startCol=3;
-        stopCol=4;
-        strandCol=6;
-        base=1;
-      }
-      else {
-        throw (format("Could not recognize file extension of annotation file %s: %s") % autostrand % match[1]).str();
-      }
-    }
-    ifstream annot_fh {};
-    annot_fh.open(autostrand);
-    if (!annot_fh) {
-      throw (format("Could not open file for reading: %s") % autostrand).str();
-    }
-
-    map<string,vector<Interval<int8_t>>> interval_lists;
-    string line;
-    while (std::getline(annot_fh, line)) {
-      if (boost::regex_search(line, boost::regex{R"(^[ ]*#)"})) {
-        continue;
-      }
-
-      vector<string> cols;
-      boost::algorithm::split_regex(cols, line, boost::regex{R"(\t)"});
-      size_t max_col = std::max({chrCol, startCol, stopCol, strandCol});
-      if (max_col < cols.size()) {
-        string chr {cols[chrCol]};
-        int start = std::stoi(cols[startCol]);
-        int stop = std::stoi(cols[stopCol]);
-        string strandStr {cols[strandCol]};
-        int8_t strand = strandStr == "-1" || strandStr == "-"? '-' :
-          strandStr == "1" || strandStr == "+"? '+' :
-          '\0';
-
-        if (strand != '\0') {
-          if (!interval_lists.count(chr)) {
-            interval_lists[chr] = vector<Interval<int8_t>>{};
-          }
-          interval_lists[chr].push_back(Interval<int8_t>{start-(base-1), stop, strand});
-        }
-      }
-    }
-    annot_fh.close();
-    for (auto &i : interval_lists) {
-      if (!intervals.count(i.first)) {
-        intervals[i.first] = IntervalTree<int8_t>{i.second};
-      }
-    }
-  }
-}
-
 static void
 analyzeBam(string split_strand,
            bool autostrandPass,
-           map<string,IntervalTree<int8_t>>& intervals)
+           BamReader& intervals)
 {
   BamReader bam;
   if (!bam.Open(bamfile)) {
@@ -285,14 +213,16 @@ analyzeBam(string split_strand,
     for (auto &exon : exons) {
       // try to determine the strandedness of the data
       if (autostrandPass) {
-        if (intervals.count(refs[lastchr].RefName)) {
-          vector<Interval<int8_t>> overlappingAnnot;
-          intervals[refs[lastchr].RefName].findOverlapping(exon.first+1, exon.second, overlappingAnnot);
-          for (const auto& interval : overlappingAnnot) {
-            size_t overlap_length = std::min(exon.second, numeric_cast<size_t>(interval.stop)) -
-                                    std::max(exon.first, numeric_cast<size_t>(interval.start-1));
+        int tid = intervals.GetReferenceID(refs[read.RefID].RefName);
+        intervals.SetRegion(tid, exon.first, tid, exon.second);
+        BamAlignment interval_read;
+        while (intervals.GetNextAlignment(interval_read)) {
+          vector<pair<size_t,size_t>> interval;
+          cigar2exons(interval, interval_read.CigarData, interval_read.Position);
+          for (auto& i : interval) {
+            size_t overlap_length = std::min(exon.second, i.second) - std::max(exon.first, i.first);
 
-            char strandtype = read.IsReverseStrand() == (interval.value == '-')? 's' : 'r';
+            char strandtype = read.IsReverseStrand() == interval_read.IsReverseStrand()? 's' : 'r';
             if (read_number == 1) autostrandTotals[strandtype] += overlap_length;
             else if (read_number == 2) autostrandTotals2[strandtype] += overlap_length;
           }
@@ -432,7 +362,7 @@ int main(int argc, char **argv) {
       // if your protocol is from Illumina (fr-secondstrand), read_one is on the correct strand
       // if your protocol is dUTP (ala CSH) (fr-firststrand), then read_two is on the correct strand
       ("autostrand", value<string>(&autostrand)->value_name("ANNOT_FILE"),
-       "Attempt to determine the strandedness of the input data using an annotation file. Can take GFF2/3, GTF, BED formatted files")
+       "Attempt to determine the strandedness of the input data using an annotation file. Must be an indexed BAM file.")
       ("strand", value<string>(&split_strand)->value_name("[TYPE]"),
        "Split output bedgraph by strand: Possible values: u s r uu us ur su ss sr ru rs rr, first char is read1, second is read2, u=unstranded, s=stranded, r=reverse")
       ("read", bool_switch(&split_read), "Split output bedgraph by read number")
@@ -488,9 +418,11 @@ int main(int argc, char **argv) {
     }
 
     // read in the annotation file
-    map<string,IntervalTree<int8_t>> intervals{};
+    BamReader intervals;
     if (!autostrand.empty()) {
-      readAnnotationFile(autostrand, intervals);
+      if (!intervals.Open(autostrand)) {
+        throw (format("Could not open input BAM file %s") % autostrand).str();
+      }
     }
 
     // analyze the bam file and produce histograms
