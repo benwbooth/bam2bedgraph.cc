@@ -215,17 +215,24 @@ analyzeBam(string split_strand,
       if (autostrandPass) {
         int tid = intervals.GetReferenceID(refs[read.RefID].RefName);
         if (tid != -1) {
-          intervals.SetRegion(tid, exon.first, tid, exon.second);
-          BamAlignment interval_read;
-          while (intervals.GetNextAlignment(interval_read)) {
-            vector<pair<size_t,size_t>> interval;
-            cigar2exons(interval, interval_read.CigarData, interval_read.Position);
-            for (auto& i : interval) {
-              size_t overlap_length = std::min(exon.second, i.second) - std::max(exon.first, i.first);
+          if (intervals.SetRegion(tid, exon.first, tid, exon.second)) {
+            BamAlignment interval_read;
+            while (intervals.GetNextAlignment(interval_read)) {
+              vector<pair<size_t,size_t>> interval;
+              cigar2exons(interval, interval_read.CigarData, interval_read.Position);
+              for (auto& i : interval) {
+                size_t overlap_length = std::min(exon.second, i.second) - std::max(exon.first, i.first);
+                // cerr << "exon.first=" << exon.first << ", exon.second=" << exon.second
+                //      << ", i.first=" << i.first << ", i.second=" << i.second
+                //      << ", overlap_length=" << overlap_length << endl;
 
-              char strandtype = read.IsReverseStrand() == interval_read.IsReverseStrand()? 's' : 'r';
-              if (read_number == 1) autostrandTotals[strandtype] += overlap_length;
-              else if (read_number == 2) autostrandTotals2[strandtype] += overlap_length;
+                char strandtype = read.IsReverseStrand() == interval_read.IsReverseStrand()? 's' : 'r';
+                if (read_number == 1) autostrandTotals[strandtype] += overlap_length;
+                else if (read_number == 2) autostrandTotals2[strandtype] += overlap_length;
+                // cerr << "read_number=" << read_number << ", strandtype=" << strandtype
+                //      << ", autostrandTotals" << (read_number == 1? "" : "2") << "[" << strandtype << "]="
+                //      << (read_number ==1? autostrandTotals[strandtype] : autostrandTotals2[strandtype]) << endl;
+              }
             }
           }
         }
@@ -329,7 +336,7 @@ analyzeBam(string split_strand,
           boost::regex_replace(boost::regex_replace(fh.first, regex(R"(\.bedgraph$)"),"")+".bw", regex(R"(')"), "'\\''")).str();
       int result = system(cmd.c_str());
       if (WEXITSTATUS(result) != 0) {
-        throw format("Command \"%s\" returned bad exit status: %d") % cmd % WEXITSTATUS(result);
+        throw (format("Command \"%s\" returned bad exit status: %d") % cmd % WEXITSTATUS(result)).str();
       }
 
       // remove the bedgraph file
@@ -424,6 +431,9 @@ int main(int argc, char **argv) {
     if (!autostrand.empty()) {
       if (!intervals.Open(autostrand)) {
         throw (format("Could not open strand annotation BAM file %s") % autostrand).str();
+      }
+      if (!intervals.LocateIndex()) {
+        throw (format("Could not open index for strand annotation BAM file %s") % autostrand).str();
       }
     }
 
