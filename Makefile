@@ -4,4 +4,4 @@ LDLIBS= -lbamtools -lboost_program_options -lboost_filesystem -lboost_system -lb
 -include $(BIN).d
 
 $(BIN) : $(BIN).cc
-	$(LINK.cc) $^ $(LDLIBS) -o $@
+	$(LINK.cc) -MMD -MP $^ $(LDLIBS) -o $@

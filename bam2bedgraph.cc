@@ -25,6 +25,8 @@
 #include <boost/program_options.hpp>
 #include <boost/regex.hpp>
 
+#include "IntervalTree.h"
+
 using std::string;
 using std::cout;
 using std::cerr;
@@ -130,7 +132,7 @@ void write_chr(
 static void
 analyzeBam(string split_strand,
            bool autostrandPass,
-           BamReader& intervals)
+           map<string,IntervalTree<int8_t>>& intervals)
 {
   BamReader bam;
   if (!bam.Open(bamfile)) {
@@ -213,27 +215,16 @@ analyzeBam(string split_strand,
     for (auto &exon : exons) {
       // try to determine the strandedness of the data
       if (autostrandPass) {
-        int tid = intervals.GetReferenceID(refs[read.RefID].RefName);
-        if (tid != -1) {
-          if (intervals.SetRegion(tid, exon.first, tid, exon.second)) {
-            BamAlignment interval_read;
-            while (intervals.GetNextAlignment(interval_read)) {
-              vector<pair<size_t,size_t>> interval;
-              cigar2exons(interval, interval_read.CigarData, interval_read.Position);
-              for (auto& i : interval) {
-                size_t overlap_length = std::min(exon.second, i.second) - std::max(exon.first, i.first);
-                // cerr << "exon.first=" << exon.first << ", exon.second=" << exon.second
-                //      << ", i.first=" << i.first << ", i.second=" << i.second
-                //      << ", overlap_length=" << overlap_length << endl;
+        if (intervals.count(refs[lastchr].RefName)) {
+          vector<Interval<int8_t>> overlappingAnnot;
+          intervals[refs[lastchr].RefName].findOverlapping(exon.first+1, exon.second, overlappingAnnot);
+          for (const auto& interval : overlappingAnnot) {
+            size_t overlap_length = std::min(exon.second, numeric_cast<size_t>(interval.stop)) -
+              std::max(exon.first, numeric_cast<size_t>(interval.start-1));
 
-                char strandtype = read.IsReverseStrand() == interval_read.IsReverseStrand()? 's' : 'r';
-                if (read_number == 1) autostrandTotals[strandtype] += overlap_length;
-                else if (read_number == 2) autostrandTotals2[strandtype] += overlap_length;
-                // cerr << "read_number=" << read_number << ", strandtype=" << strandtype
-                //      << ", autostrandTotals" << (read_number == 1? "" : "2") << "[" << strandtype << "]="
-                //      << (read_number ==1? autostrandTotals[strandtype] : autostrandTotals2[strandtype]) << endl;
-              }
-            }
+            char strandtype = read.IsReverseStrand() == (interval.value == '-')? 's' : 'r';
+            if (read_number == 1) autostrandTotals[strandtype] += overlap_length;
+            else if (read_number == 2) autostrandTotals2[strandtype] += overlap_length;
           }
         }
       }
@@ -371,7 +362,7 @@ int main(int argc, char **argv) {
       // if your protocol is from Illumina (fr-secondstrand), read_one is on the correct strand
       // if your protocol is dUTP (ala CSH) (fr-firststrand), then read_two is on the correct strand
       ("autostrand", value<string>(&autostrand)->value_name("ANNOT_FILE"),
-       "Attempt to determine the strandedness of the input data using an annotation file. Must be an indexed BAM file.")
+       "Attempt to determine the strandedness of the input data using an annotation file. Must be a BAM file.")
       ("strand", value<string>(&split_strand)->value_name("[TYPE]"),
        "Split output bedgraph by strand: Possible values: u s r uu us ur su ss sr ru rs rr, first char is read1, second is read2, u=unstranded, s=stranded, r=reverse")
       ("read", bool_switch(&split_read), "Split output bedgraph by read number")
@@ -427,14 +418,35 @@ int main(int argc, char **argv) {
     }
 
     // read in the annotation file
-    BamReader intervals;
+    map<string,vector<Interval<int8_t>>> interval_lists;
+    BamReader bam;
     if (!autostrand.empty()) {
-      if (!intervals.Open(autostrand)) {
+      if (!bam.Open(autostrand)) {
         throw (format("Could not open strand annotation BAM file %s") % autostrand).str();
       }
-      if (!intervals.LocateIndex()) {
-        throw (format("Could not open index for strand annotation BAM file %s") % autostrand).str();
+      auto refs = bam.GetReferenceData();
+      if (fixchr) {
+        for (auto& ref : refs) {
+          ref.RefName = !boost::regex_search(ref.RefName, boost::regex{R"(^(chr|Zv9_))"})?
+            string("chr")+ref.RefName :
+            ref.RefName;
+        }
       }
+      BamAlignment read;
+      while (bam.GetNextAlignment(read)) {
+        int32_t tid = read.RefID;
+        if (!interval_lists.count(refs[tid].RefName)) {
+          interval_lists[refs[tid].RefName] = vector<Interval<int8_t>>{};
+        }
+        interval_lists[refs[tid].RefName].push_back(Interval<int8_t>{
+            read.Position+1,
+            read.GetEndPosition(),
+            read.IsReverseStrand()? '-' : '+'});
+      }
+    }
+    map<string,IntervalTree<int8_t>> intervals;
+    for (auto &kv : interval_lists) {
+      intervals[kv.first] = IntervalTree<int8_t>{kv.second};
     }
 
     // analyze the bam file and produce histograms
