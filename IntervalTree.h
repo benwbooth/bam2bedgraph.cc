@@ -1,3 +1,4 @@
+// Taken from: https://github.com/ekg/intervaltree
 #ifndef __INTERVAL_TREE_H
 #define __INTERVAL_TREE_H
 
