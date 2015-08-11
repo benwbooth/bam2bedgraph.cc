@@ -356,8 +356,10 @@ int main(int argc, char **argv) {
     options_description desc;
     desc.add_options()
       ("help", "produce help")
-      ("bamfile", value<string>(&bamfile)->value_name("FILE"), "Input BAM filename")
-      ("split", bool_switch(&split_exons), "Use CIGAR string to split alignment into separate exons (default)")
+      ("bamfile", value<string>(&bamfile)->value_name("FILE"),
+       "Input BAM filename")
+      ("split", bool_switch(&split_exons)->default_value(true),
+       "Use CIGAR string to split alignment into separate exons (default)")
       ("nosplit", bool_switch(&nosplit))
       // if your protocol is from Illumina (fr-secondstrand), read_one is on the correct strand
       // if your protocol is dUTP (ala CSH) (fr-firststrand), then read_two is on the correct strand
@@ -382,7 +384,7 @@ int main(int argc, char **argv) {
       ("uniq", bool_switch(&uniq), "Keep only unique alignments (NH:i:1)")
       ("nouniq", bool_switch(&nouniq), "(default)")
       ("out", value<string>(&out)->value_name("FILE"), "Output file prefix")
-      ("trackline", bool_switch(&trackline), "Output a UCSC track line (default)")
+      ("trackline", bool_switch(&trackline)->default_value(true), "Output a UCSC track line (default)")
       ("notrackline", bool_switch(&notrackline))
       ("trackname", value<string>(&trackname)->value_name("TRACKNAME"), "Name of track for the track line") ;
     positional_options_description pod;
