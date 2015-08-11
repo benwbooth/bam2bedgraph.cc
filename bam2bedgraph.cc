@@ -136,7 +136,7 @@ analyzeBam(string split_strand,
 {
   BamReader bam;
   if (!bam.Open(bamfile)) {
-    throw (format("Could not open input BAM file ") % bamfile).str();
+    throw (format("Could not open input BAM file %s") % bamfile).str();
   }
   auto header = bam.GetHeader();
   auto refs = bam.GetReferenceData();
