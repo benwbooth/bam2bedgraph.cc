@@ -52,7 +52,7 @@ using boost::numeric_cast;
 using boost::regex;
 
 
-static bool split_exons=true, split_read, zero, paired_only, proper_only, primary_only, trackline=true, bigwig, uniq, fixchr;
+static bool split_exons=true, split_read, zero, paired_only, proper_only, primary_only, trackline, bigwig, uniq, fixchr;
 static string bamfile, trackname, out, autostrand, split_strand="uu";
 
 void cigar2exons(vector<pair<size_t,size_t>> &exons, const vector<CigarOp> &cigar, size_t pos) {
@@ -321,7 +321,9 @@ analyzeBam(string split_strand,
       }
       genome_fh.close();
 
-      string cmd = (format("bedGraphToBigWig '%s' '%s' '%s'") %
+      string cmd = (format("LC_COLLATE=C sort -k1,1 -k2,2n -o '%s.sorted' '%s' && bedGraphToBigWig '%s.sorted' '%s' '%s'") %
+          boost::regex_replace(fh.first, regex(R"(')"), "'\\''") %
+          boost::regex_replace(fh.first, regex(R"(')"), "'\\''") %
           boost::regex_replace(fh.first, regex(R"(')"), "'\\''") %
           boost::regex_replace(genome_filename, regex(R"(')"), "'\\''") %
           boost::regex_replace(boost::regex_replace(fh.first, regex(R"(\.bedgraph$)"),"")+".bw", regex(R"(')"), "'\\''")).str();
@@ -332,6 +334,7 @@ analyzeBam(string split_strand,
 
       // remove the bedgraph file
       boost::filesystem::remove(fh.first);
+      boost::filesystem::remove(fh.first+".sorted");
       // remove the genome file
       boost::filesystem::remove(genome_filename);
     }
@@ -384,7 +387,7 @@ int main(int argc, char **argv) {
       ("uniq", bool_switch(&uniq), "Keep only unique alignments (NH:i:1)")
       ("nouniq", bool_switch(&nouniq), "(default)")
       ("out", value<string>(&out)->value_name("FILE"), "Output file prefix")
-      ("trackline", bool_switch(&trackline)->default_value(true), "Output a UCSC track line (default)")
+      ("trackline", bool_switch(&trackline), "Output a UCSC track line (default)")
       ("notrackline", bool_switch(&notrackline))
       ("trackname", value<string>(&trackname)->value_name("TRACKNAME"), "Name of track for the track line") ;
     positional_options_description pod;
