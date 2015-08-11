@@ -1,1 +1,3 @@
 *.d
+bin
+bam2bedgraph
