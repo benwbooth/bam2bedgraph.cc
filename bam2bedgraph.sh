@@ -2,8 +2,8 @@
 set -eu
 export SCRIPT=$(cd "$(dirname "$0")" && pwd -P)/$(basename "$0") 
 export SRC=/${SCRIPT%.sh}.cc
-export BINDIR=~/.cache/bin
-export BIN=$BINDIR/$HOSTNAME/$SRC
+export BINDIR=$(dirname "$SCRIPT")/bin
+export BIN=$BINDIR/$HOSTNAME/$(basename "${SRC%.cc}")
 cd "$(dirname "$0")" 
 
 make SHELL='bash -eu' -s -f - "$BIN" -j <<'EOF'
