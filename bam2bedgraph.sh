@@ -4,9 +4,7 @@ export SCRIPT=$(cd "$(dirname "$0")" && pwd -P)/$(basename "$0")
 export SRC=/${SCRIPT%.sh}.cc
 export BINDIR=$(dirname "$SCRIPT")/bin
 export BIN=$BINDIR/$HOSTNAME/$(basename "${SRC%.cc}")
-cd "$(dirname "$0")" 
-
-make SHELL='bash -eu' -s -f - "$BIN" -j <<'EOF'
+(cd "$(dirname "$0")" && make SHELL='bash -eu' -s -f - "$BIN" -j <<'EOF')
 -include $(BIN).d
 CXXFLAGS= $(if $(DEBUG),-g -O0,-O2) -march=native -pipe -std=c++1y -Wall -Wextra -pedantic -I/usr/local/include/bamtools -I/usr/include/bamtools
 LDLIBS= -lbamtools -lboost_program_options -lboost_filesystem -lboost_system -lboost_regex
@@ -19,6 +17,4 @@ $(BIN) : $(SRC) $(SCRIPT)
 	mv "$$TMP" "$@" && \
 	chmod +x "$@"
 EOF
-
 exec -a "$0" "$BIN" "$@"
-exit $?
