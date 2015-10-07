@@ -2,5 +2,6 @@
 -Wall
 -Wextra
 -pedantic
+-I/usr/local/include
 -I/usr/local/include/bamtools
 -I/usr/include/bamtools

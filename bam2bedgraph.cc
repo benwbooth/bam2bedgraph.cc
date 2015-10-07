@@ -431,8 +431,6 @@ int main(int argc, char **argv) {
     if (nofprime) fprime = false;
     if (notprime) tprime = false;
 
-    if (fprime || tprime) split_exons = false;
-
     boost::algorithm::to_lower(split_strand);
     if (split_strand.size() == 1) split_strand += "u";
     if (!boost::regex_search(split_strand, boost::regex{R"(^[usr][usr]$)"})) {
