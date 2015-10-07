@@ -52,8 +52,10 @@ using boost::numeric_cast;
 using boost::regex;
 
 
-static bool split_exons=true, split_read, zero, paired_only, proper_only, primary_only, trackline, bigwig, uniq, fixchr;
+static bool split_exons=true, split_read, zero, paired_only, proper_only,
+  primary_only, trackline, bigwig, uniq, fixchr, fprime, tprime;
 static string bamfile, trackname, out, autostrand, split_strand="uu";
+int32_t edge_length = 1;
 
 void cigar2exons(vector<pair<size_t,size_t>> &exons, const vector<CigarOp> &cigar, size_t pos) {
   for (auto &op : cigar) {
@@ -235,7 +237,12 @@ analyzeBam(string split_strand,
         if (ref_length < exon.second) refs[read.RefID].RefLength = numeric_cast<int32_t>(exon.second);
         if (histogram[tuple].size() < ref_length) histogram[tuple].resize(ref_length);
 
-        for (size_t pos=exon.first; pos < exon.second; ++pos) {
+        size_t start = (tprime && strand != "-") || (fprime && strand == "-")? 
+          max(exon.first, exon.second-edge_length) : exon.first;
+        size_t stop = (fprime && strand != "-") || (tprime && strand == "-")? 
+          min(exon.second, exon.first+edge_length) : exon.second;
+
+        for (size_t pos=start; pos < stop; ++pos) {
           histogram[tuple][pos]++;
         }
       }
@@ -354,7 +361,7 @@ int main(int argc, char **argv) {
 
     bool nosplit=false, noread=false, nozero=false, nofixchr=false,
       nopaired=false, noproper=false, noprimary=false,nobigwig=false,
-      nouniq=false, notrackline=false;
+      nouniq=false, notrackline=false, nofprime=false, notprime=false;
 
     options_description desc;
     desc.add_options()
@@ -389,7 +396,14 @@ int main(int argc, char **argv) {
       ("out", value<string>(&out)->value_name("FILE"), "Output file prefix")
       ("trackline", bool_switch(&trackline), "Output a UCSC track line (default)")
       ("notrackline", bool_switch(&notrackline))
-      ("trackname", value<string>(&trackname)->value_name("TRACKNAME"), "Name of track for the track line") ;
+      ("trackname", value<string>(&trackname)->value_name("TRACKNAME"), "Name of track for the track line")
+      ("5prime", bool_switch(&fprime), "Only report the 5' ends")
+      ("no5prime", bool_switch(&nofprime), "(default)")
+      ("3prime", bool_switch(&tprime), "Only report the 3' ends")
+      ("no3prime", bool_switch(&notprime), "(default)")
+      ("edge", value<int32_t>(&edge_length)->value_name("LENGTH")->default_value(1), 
+       "Length of edges for --5prime and --3prime options (default: 1)")
+      ;
     positional_options_description pod;
     pod.add("bamfile", 1);
     variables_map vm;
@@ -414,6 +428,10 @@ int main(int argc, char **argv) {
     if (nobigwig) bigwig = false;
     if (nouniq) uniq = false;
     if (notrackline) trackline = false;
+    if (nofprime) fprime = false;
+    if (notprime) tprime = false;
+
+    if (fprime || tprime) split_exons = false;
 
     boost::algorithm::to_lower(split_strand);
     if (split_strand.size() == 1) split_strand += "u";
