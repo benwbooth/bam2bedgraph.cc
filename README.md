@@ -23,8 +23,7 @@ Usage: ./bam2bedgraph [ options ] bamfile
                           exons (default)
   --nosplit
   --autostrand ANNOT_FILE Attempt to determine the strandedness of the input
-                          data using an annotation file. Can take GFF2/3, GTF,
-                          BED formatted files
+                          data using an annotation file. Must be a BAM file.
   --strand [TYPE]         Split output bedgraph by strand: Possible values: u s
                           r uu us ur su ss sr ru rs rr, first char is read1,
                           second is read2, u=unstranded, s=stranded, r=reverse
@@ -49,4 +48,10 @@ Usage: ./bam2bedgraph [ options ] bamfile
   --trackline             Output a UCSC track line (default)
   --notrackline
   --trackname TRACKNAME   Name of track for the track line
+  --5prime                Only report the 5' ends
+  --no5prime              (default)
+  --3prime                Only report the 3' ends
+  --no3prime              (default)
+  --edge LENGTH (=1)      Length of edges for --5prime and --3prime options
+                          (default: 1)
 ```
