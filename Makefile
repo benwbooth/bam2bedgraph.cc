@@ -5,3 +5,6 @@ LDLIBS= -lbamtools -lboost_program_options -lboost_filesystem -lboost_system -lb
 
 $(BIN) : $(BIN).cc
 	$(LINK.cc) -MMD -MP $^ $(LDLIBS) -o $@
+
+clean:
+	rm -v "$(BIN)" "$(BIN).d"
