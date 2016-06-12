@@ -7,4 +7,4 @@ $(BIN) : $(BIN).cc
 	$(LINK.cc) -MMD -MP $^ $(LDLIBS) -o $@
 
 clean:
-	rm -v "$(BIN)" "$(BIN).d"
+	rm "$(BIN)" "$(BIN).d"
