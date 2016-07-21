@@ -111,8 +111,9 @@ void write_chr(
     auto read_number = std::get<0>(tuple.first);
     auto strand = std::get<1>(tuple.first);
     auto& histo = tuple.second;
-
     string filename = open_file(read_number, strand, split_strand, fhs);
+    cerr << "Writing chr " << chr.RefName << ", read " << read_number<< ", strand " << strand << " to file " << filename << endl;
+
     auto &fh = *fhs[filename];
     // scan the histogram to produce the bedgraph data
     size_t start = 0;
@@ -161,6 +162,7 @@ analyzeBam(string split_strand,
   map<string,size_t> refmap;
   for (size_t i=0; i<refs.size(); ++i) {
     refmap[refs[i].RefName] = i;
+    //cerr << "refs[" << i << "].RefName=" << refs[i].RefName << endl;
   }
 
   int32_t lastchr = -1;
@@ -173,6 +175,7 @@ analyzeBam(string split_strand,
   while (bam.GetNextAlignment(read)) {
     // if we've hit a new chr, write out the bedgraph data and clear the histogram
     if (lastchr == -1 || read.RefID != lastchr) {
+      //cerr << "lastchr=" << lastchr << ", read.RefID=" << read.RefID << endl;
       if (!autostrandPass && !histogram.empty() && lastchr != -1) {
         write_chr(refs[lastchr], histogram, fhs, split_strand);
       }
@@ -197,18 +200,15 @@ analyzeBam(string split_strand,
     else exons.push_back({read.Position, read.GetEndPosition()});
     int32_t read_number = read.IsSecondMate()? 2 : 1;
 
-    // attempt to determine the strandedness of the transcript
-    uint8_t xs = 0;
     // read numbers match, is not reverse, is not flipped
     string strand =
-        read.GetTag("XS",xs) && xs? string{static_cast<char>(xs)} :
           read_number == 1? split_strand[0] == 'r'? read.IsReverseStrand()? "+" : "-" :
                             split_strand[0] == 's'? read.IsReverseStrand()? "-" : "+" :
                             "" :
           read_number == 2? split_strand[1] == 's'? read.IsReverseStrand()? "-" : "+" :
                             split_strand[1] == 'r'? read.IsReverseStrand()? "+" : "-" :
                             "" :
-        "";
+          "";
 
     int32_t read_num = split_read? read_number : 0;
 
@@ -224,7 +224,7 @@ analyzeBam(string split_strand,
             size_t overlap_length = std::min(exon.second, numeric_cast<size_t>(interval.stop)) -
               std::max(exon.first, numeric_cast<size_t>(interval.start-1));
 
-            char strandtype = read.IsReverseStrand() == (interval.value == '-')? 's' : 'r';
+            char strandtype = (read.IsReverseStrand() == (interval.value == '-'))? 's' : 'r';
             if (read_number == 1) autostrandTotals[strandtype] += overlap_length;
             else if (read_number == 2) autostrandTotals2[strandtype] += overlap_length;
           }
@@ -237,9 +237,9 @@ analyzeBam(string split_strand,
         if (ref_length < exon.second) refs[read.RefID].RefLength = numeric_cast<int32_t>(exon.second);
         if (histogram[tuple].size() < ref_length) histogram[tuple].resize(ref_length);
 
-        size_t start = (tprime && strand != "-") || (fprime && strand == "-")? 
+        size_t start = ((tprime && strand != "-") || (fprime && strand == "-"))?
           max(exon.first, exon.second-edge_length) : exon.first;
-        size_t stop = (fprime && strand != "-") || (tprime && strand == "-")? 
+        size_t stop = ((fprime && strand != "-") || (tprime && strand == "-"))?
           min(exon.second, exon.first+edge_length) : exon.second;
 
         for (size_t pos=start; pos < stop; ++pos) {
@@ -289,7 +289,7 @@ analyzeBam(string split_strand,
         best1 = i;
       }
       else if (second_best1.second < i.second) {
-        second_best1 = i; 
+        second_best1 = i;
       }
     }
     for (auto &i : autostrandTotals2) {
@@ -401,7 +401,7 @@ int main(int argc, char **argv) {
       ("no5prime", bool_switch(&nofprime), "(default)")
       ("3prime", bool_switch(&tprime), "Only report the 3' ends")
       ("no3prime", bool_switch(&notprime), "(default)")
-      ("edge", value<int32_t>(&edge_length)->value_name("LENGTH")->default_value(1), 
+      ("edge", value<int32_t>(&edge_length)->value_name("LENGTH")->default_value(1),
        "Length of edges for --5prime and --3prime options (default: 1)")
       ;
     positional_options_description pod;
